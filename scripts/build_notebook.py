@@ -35,6 +35,7 @@ import matplotlib.dates as mdates
 
 from analysis import (
     MAJOR_UPDATES,
+    MINOR_EVENTS,
     load_reviews,
     weekly_volume_and_positivity,
     playtime_by_recommendation,
@@ -60,8 +61,22 @@ df.head(3)
 cells.append(nbf.v4.new_markdown_cell(
 """## 1. Review volume and % positive per week
 
-Dashed lines mark the two major content updates: **1.0 Launch** (8 May
-2024) and **Invaders of Oakveil** (28 April 2025)."""
+Dashed red lines mark the two major content updates: **1.0 Launch** (8 May
+2024) and **Invaders of Oakveil** (28 April 2025). Dotted gray lines mark
+other volume spikes large enough to need an explanation, labeled only
+where we could verify a cause against Steam/patch-note sources:
+
+- **1.0.9.0 patch** — "Spells Balance, Quality of Life & Gamepad
+  Improvements", released 17 Sep 2024.
+- **Steam Autumn Sale** — ran 27 Nov-4 Dec 2024 (platform-wide, not
+  V Rising-specific).
+- **Free Weekend + 1.1.1 patch** — Free Weekend promotion ran 14-18 May
+  2026 alongside patch 1.1.1; the dip in % positive that week is
+  consistent with a large wave of new/trial players.
+
+Any other, smaller fluctuations in the chart are *not* individually
+explained here — we only label what we could verify, per
+`MINOR_EVENTS`/`MINOR_EVENTS_DETAIL` in `analysis.py`."""
 ))
 
 cells.append(nbf.v4.new_code_cell(
@@ -71,12 +86,17 @@ fig, ax1 = plt.subplots(figsize=(11, 5))
 ax2 = ax1.twinx()
 
 ax1.bar(weekly["created_at"], weekly["num_reviews"], width=5.5, color="#6B6E76", alpha=0.35, label="Reviews / week")
-ax2.plot(weekly["created_at"], weekly["pct_positive"], color="#3D5A80", linewidth=1.8, label="% positive")
+ax2.plot(weekly["created_at"], weekly["pct_positive_rolling4"], color="#3D5A80", linewidth=1.8, label="% positive (4-wk rolling)")
 
+ymax = ax1.get_ylim()[1]
 for label, date_str in MAJOR_UPDATES:
     d = mdates.datestr2num(date_str)
-    ax1.axvline(d, color="#B3493B", linestyle="--", linewidth=1)
-    ax1.text(d, ax1.get_ylim()[1] * 0.96, label, rotation=90, fontsize=8, color="#B3493B", va="top", ha="right")
+    ax1.axvline(d, color="#B3493B", linestyle="--", linewidth=1.2)
+    ax1.text(d, ymax * 0.97, label, rotation=90, fontsize=8, color="#B3493B", va="top", ha="right", weight="bold")
+for label, date_str in MINOR_EVENTS:
+    d = mdates.datestr2num(date_str)
+    ax1.axvline(d, color="#6B6E76", linestyle=":", linewidth=1)
+    ax1.text(d, ymax * 0.97, label, rotation=90, fontsize=6.5, color="#555555", va="top", ha="right")
 
 ax1.set_ylabel("Reviews / week")
 ax2.set_ylabel("% positive")
@@ -91,28 +111,39 @@ plt.show()
 ))
 
 cells.append(nbf.v4.new_markdown_cell(
-"""**Reading this honestly:** volume spikes are the clearest, least
-ambiguous signal of "something happened" around an update — a launch or a
-big content drop reliably pulls in a burst of reviews. The %-positive
-line is noisier and moves less than you might expect; a single bad week
-of % positive on a low-volume week can look dramatic but represents very
-few people."""
+"""**Reading this honestly:** the line above is a **4-week rolling %
+positive**, not the raw per-week value — a plain per-week line would
+occasionally show a misleading spike or dip just from a small sample in a
+quiet week (weeks below 20 reviews are masked out of the raw series for
+the same reason; the final, still-accumulating week is dropped entirely
+rather than shown as a fake near-100%/0% point).
+
+Volume spikes are the clearest, least ambiguous signal of "something
+happened" around an update — a launch, a big content drop, a sale, or a
+free weekend reliably pulls in a burst of reviews, and that burst decays
+back to baseline within roughly 6-8 weeks. The %-positive line, by
+contrast, moves surprisingly little across the same events and stays in a
+fairly narrow band — volume is the more informative signal here than
+sentiment."""
 ))
 
 cells.append(nbf.v4.new_markdown_cell(
 """## 2. Recurring topics in negative reviews
 
 TF-IDF + NMF topic modeling over negative (`recommended == False`)
-reviews only. For each topic: the top weighted words, and 2-3 short
-representative *phrases* (not full review quotes) pulled from the
-reviews that load most heavily on that topic."""
+reviews only. For each topic: a short descriptive label (derived from the
+top weighted words, not a separately-sourced claim), the top weighted
+words themselves, and 2-3 short representative *phrases* (not full review
+quotes) pulled from the reviews that load most heavily on that topic.
+Profanity is filtered out of both the model vocabulary and the phrases."""
 ))
 
 cells.append(nbf.v4.new_code_cell(
 """topics = topic_model_negative_reviews(df, n_topics=6, n_top_words=8, n_examples=3)
 
 for t in topics:
-    print(f"Topic {t['topic_id']}: " + ", ".join(t["top_words"]))
+    print(f"{t['label']}")
+    print(f"  top words: " + ", ".join(t["top_words"]))
     for p in t["example_phrases"]:
         print(f"    - \\"{p}\\"")
     print()
@@ -122,9 +153,11 @@ for t in topics:
 cells.append(nbf.v4.new_markdown_cell(
 """**Caveat on topics:** NMF topics are unsupervised clusters of co-occurring
 words, not ground truth categories — they need a human glance to confirm
-they're coherent, and the labels above are just the model's top words,
-not curated category names. Treat this as "here's where to look," not a
-definitive breakdown of why people dislike the game."""
+they're coherent, and the short labels above are a plain-language gloss on
+the model's top words, not independently verified category names. Treat
+this as "here's where to look," not a definitive breakdown of why people
+dislike the game. These same six themes, with one phrase each, are also on
+the one-page PDF summary."""
 ))
 
 cells.append(nbf.v4.new_markdown_cell(
