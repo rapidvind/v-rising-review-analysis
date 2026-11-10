@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Raw/processed review text is not committed: it's third-party user-generated
+# content pulled live from Steam, not ours to redistribute wholesale. Anyone
+# cloning this repo can regenerate it with scripts/fetch_reviews.py.
+data/*.jsonl
+data/*.csv
