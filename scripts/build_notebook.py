@@ -7,7 +7,7 @@ nb = nbf.v4.new_notebook()
 cells = []
 
 cells.append(nbf.v4.new_markdown_cell(
-"""# V Rising — Public Steam Review Analysis
+"""# V Rising: Public Steam Review Analysis
 
 A small, honest look at public Steam reviews for *V Rising* (Steam app id
 `1604030`), built as a portfolio piece.
@@ -15,7 +15,7 @@ A small, honest look at public Steam reviews for *V Rising* (Steam app id
 **Data source:** Steam's own storefront review data, fetched with
 `scripts/fetch_reviews.py` (see that file for a note on the endpoint).
 English-language reviews only. No usernames, SteamIDs, or other author
-identifiers are collected or stored — only review text, recommended
+identifiers are collected or stored: only review text, recommended
 yes/no, timestamp, playtime at time of review, and vote counts.
 
 **Not affiliated with or endorsed by Stunlock Studios.** This is an
@@ -32,6 +32,7 @@ sys.path.append("../scripts")
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from matplotlib.lines import Line2D
 
 from analysis import (
     MAJOR_UPDATES,
@@ -63,19 +64,20 @@ cells.append(nbf.v4.new_markdown_cell(
 
 Dashed red lines mark the two major content updates: **1.0 Launch** (8 May
 2024) and **Invaders of Oakveil** (28 April 2025). Dotted gray lines mark
-other volume spikes large enough to need an explanation, labeled only
-where we could verify a cause against Steam/patch-note sources:
+other volume spikes large enough to need an explanation, labeled in the
+legend only where we could verify a cause against Steam/patch-note
+sources (left to right):
 
-- **1.0.9.0 patch** — "Spells Balance, Quality of Life & Gamepad
+- **1.0.9.0 patch**: "Spells Balance, Quality of Life & Gamepad
   Improvements", released 17 Sep 2024.
-- **Steam Autumn Sale** — ran 27 Nov-4 Dec 2024 (platform-wide, not
+- **Steam Autumn Sale**: ran 27 Nov-4 Dec 2024 (platform-wide, not
   V Rising-specific).
-- **Free Weekend + 1.1.1 patch** — Free Weekend promotion ran 14-18 May
+- **Free Weekend + 1.1.1 patch**: Free Weekend promotion ran 14-18 May
   2026 alongside patch 1.1.1; the dip in % positive that week is
   consistent with a large wave of new/trial players.
 
 Any other, smaller fluctuations in the chart are *not* individually
-explained here — we only label what we could verify, per
+explained here: we only label what we could verify, per
 `MINOR_EVENTS`/`MINOR_EVENTS_DETAIL` in `analysis.py`."""
 ))
 
@@ -85,23 +87,26 @@ cells.append(nbf.v4.new_code_cell(
 fig, ax1 = plt.subplots(figsize=(11, 5))
 ax2 = ax1.twinx()
 
-ax1.bar(weekly["created_at"], weekly["num_reviews"], width=5.5, color="#6B6E76", alpha=0.35, label="Reviews / week")
-ax2.plot(weekly["created_at"], weekly["pct_positive_rolling4"], color="#3D5A80", linewidth=1.8, label="% positive (4-wk rolling)")
+ax1.bar(weekly["created_at"], weekly["num_reviews"], width=5.5, color="#6B6E76", alpha=0.35)
+ax2.plot(weekly["created_at"], weekly["pct_positive_rolling4"], color="#3D5A80", linewidth=1.8)
 
-ymax = ax1.get_ylim()[1]
-for label, date_str in MAJOR_UPDATES:
+for _, date_str in MAJOR_UPDATES:
     d = mdates.datestr2num(date_str)
     ax1.axvline(d, color="#B3493B", linestyle="--", linewidth=1.2)
-    ax1.text(d, ymax * 0.97, label, rotation=90, fontsize=8, color="#B3493B", va="top", ha="right", weight="bold")
-for label, date_str in MINOR_EVENTS:
+for _, date_str in MINOR_EVENTS:
     d = mdates.datestr2num(date_str)
     ax1.axvline(d, color="#6B6E76", linestyle=":", linewidth=1)
-    ax1.text(d, ymax * 0.97, label, rotation=90, fontsize=6.5, color="#555555", va="top", ha="right")
+
+legend_handles = [
+    Line2D([0], [0], color="#B3493B", linestyle="--", linewidth=1.2, label="Major content update"),
+    Line2D([0], [0], color="#6B6E76", linestyle=":", linewidth=1, label="Other verified spike"),
+]
+ax1.legend(handles=legend_handles, loc="upper center", ncol=2, fontsize=8, framealpha=0.85)
 
 ax1.set_ylabel("Reviews / week")
 ax2.set_ylabel("% positive")
 ax2.set_ylim(0, 100)
-ax1.set_title("V Rising — weekly review volume and % positive")
+ax1.set_title("V Rising: weekly review volume and % positive")
 ax1.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
 fig.autofmt_xdate(rotation=30)
 fig.tight_layout()
@@ -112,18 +117,18 @@ plt.show()
 
 cells.append(nbf.v4.new_markdown_cell(
 """**Reading this honestly:** the line above is a **4-week rolling %
-positive**, not the raw per-week value — a plain per-week line would
+positive**, not the raw per-week value: a plain per-week line would
 occasionally show a misleading spike or dip just from a small sample in a
 quiet week (weeks below 20 reviews are masked out of the raw series for
 the same reason; the final, still-accumulating week is dropped entirely
 rather than shown as a fake near-100%/0% point).
 
 Volume spikes are the clearest, least ambiguous signal of "something
-happened" around an update — a launch, a big content drop, a sale, or a
+happened" around an update: a launch, a big content drop, a sale, or a
 free weekend reliably pulls in a burst of reviews, and that burst decays
 back to baseline within roughly 6-8 weeks. The %-positive line, by
 contrast, moves surprisingly little across the same events and stays in a
-fairly narrow band — volume is the more informative signal here than
+fairly narrow band, so volume is the more informative signal here than
 sentiment."""
 ))
 
@@ -152,7 +157,7 @@ for t in topics:
 
 cells.append(nbf.v4.new_markdown_cell(
 """**Caveat on topics:** NMF topics are unsupervised clusters of co-occurring
-words, not ground truth categories — they need a human glance to confirm
+words, not ground truth categories: they need a human glance to confirm
 they're coherent, and the short labels above are a plain-language gloss on
 the model's top words, not independently verified category names. Treat
 this as "here's where to look," not a definitive breakdown of why people
@@ -194,7 +199,7 @@ cells.append(nbf.v4.new_markdown_cell(
 positive reviews than negative ones. That's consistent with people who
 dislike the game saying so relatively early, while people who stick
 around long enough to write a glowing review have already gotten a lot
-of hours out of it. It is *not* proof of why — reviews are a snapshot of
+of hours out of it. It is *not* proof of why: reviews are a snapshot of
 stated opinion at one point in time, not a measurement of play behavior
 over time."""
 ))
@@ -211,12 +216,12 @@ cells.append(nbf.v4.new_markdown_cell(
   moment, shaped by recency, mood, and what the reviewer chooses to
   mention. It is not a measurement of actual play behavior, retention,
   or churn.
-- **Numbers here are computed directly from the fetched dataset** — see
+- **Numbers here are computed directly from the fetched dataset**: see
   `scripts/fetch_reviews.py` and `scripts/analysis.py` for exactly how.
   Nothing in this notebook is estimated or invented.
 
 **What internal telemetry could add:** the things reviews structurally
-can't show — exact in-session drop-off points, return cadence after a
+can't show, exact in-session drop-off points, return cadence after a
 patch, and the large silent population that never writes a review at
 all but still churns or sticks around.
 """

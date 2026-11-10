@@ -1,7 +1,7 @@
-# V Rising — Public Steam Review Analysis
+# V Rising: Public Steam Review Analysis
 
 A small, honest portfolio analysis of public Steam reviews for *V Rising*
-(Steam app id `1604030`). Built as a thesis-application portfolio piece — not
+(Steam app id `1604030`). Built as a thesis-application portfolio piece, not
 an official or endorsed analysis.
 
 **This project uses only public data and is not affiliated with, endorsed
@@ -12,7 +12,7 @@ redistributed) for aggregate, anonymized analysis.
 ## What this is
 
 - Review volume and 4-week rolling % positive, by week, with the two major
-  content updates marked (1.0 Launch — 8 May 2024, Invaders of Oakveil —
+  content updates marked (1.0 Launch, 8 May 2024; Invaders of Oakveil,
   28 Apr 2025) plus three other verified volume spikes (see below)
 - Recurring topics in negative reviews via TF-IDF + NMF, with short,
   clean representative phrases per topic (not full quotes, no profanity)
@@ -29,21 +29,21 @@ patch-note trackers) are labeled on the chart:
 | Event | Date | Source |
 |---|---|---|
 | 1.0.9.0 patch (Spells Balance, QoL, Gamepad) | 17 Sep 2024 | patch-note trackers |
-| Steam Autumn Sale (platform-wide) | 27 Nov–4 Dec 2024 | Steam sale calendar |
-| Free Weekend + 1.1.1 patch | 14–18 May 2026 | patch-note trackers |
+| Steam Autumn Sale (platform-wide) | 27 Nov - 4 Dec 2024 | Steam sale calendar |
+| Free Weekend + 1.1.1 patch | 14-18 May 2026 | patch-note trackers |
 
 Everything else in the chart is left unlabeled rather than guessed at.
 
 ## What this explicitly is not
 
-- Not a representative survey of the playerbase — Steam reviewers are a
+- Not a representative survey of the playerbase: Steam reviewers are a
   self-selected, vocal subset.
 - English-language reviews only.
 - Review text is stated opinion at a point in time, not behavioral
   telemetry. It can't show silent churn, actual session structure, or
   drop-off points the way internal analytics could.
 
-No numbers in this repo are estimated or invented — everything is computed
+No numbers in this repo are estimated or invented: everything is computed
 directly from the fetched dataset, and the fetch/analysis code is included
 so every number is reproducible.
 
@@ -52,16 +52,16 @@ so every number is reproducible.
 Reviews are fetched directly from Steam's own storefront (no login, no API
 key, no scraping of private data) via `scripts/fetch_reviews.py`. Only
 review text, recommended/not, timestamp, playtime at time of review, and
-vote counts are kept — no usernames, SteamIDs, or other author identifiers.
+vote counts are kept, no usernames, SteamIDs, or other author identifiers.
 
 **On the endpoint:** Steam's documented public endpoint
 (`store.steampowered.com/appreviews/<id>?json=1`) was re-tested directly
-for this revision — cold, with a warmed session cookie, and with a
-matching Referer header — and it still 302-redirects to the store
+for this revision (cold, with a warmed session cookie, and with a
+matching Referer header), and it still 302-redirects to the store
 homepage for every app ID tried, not just this one. It appears to be
 retired. `fetch_reviews.py` instead calls `/ajaxappreviews/<id>`, the
 endpoint V Rising's own store page itself calls to render its review
-widget (confirmed by inspecting that page's own network requests) — same
+widget (confirmed by inspecting that page's own network requests): same
 storefront host, same public data, just the endpoint Valve's frontend
 code actually uses today. See the docstring in that file for detail.
 

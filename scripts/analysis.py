@@ -222,11 +222,38 @@ def _label_topic(top_words: list[str]) -> str:
     return best_label if best_label else " / ".join(top_words[:3])
 
 
-def _short_phrase(text: str, keywords: list[str], max_words: int = 12) -> str | None:
-    """Pull a short, clean snippet (<= max_words) around the first matching
-    keyword. Rejects any snippet containing profanity, even if the match
-    itself is clean -- these phrases are meant to be quotable as-is."""
-    words = text.replace("\n", " ").split()
+_sentence_re = re.compile(r"(?<=[.!?])\s+")
+
+
+def _is_clean(snippet_words: list[str]) -> bool:
+    return not any(_has_profanity(w) for w in snippet_words) and "♥" not in " ".join(snippet_words)
+
+
+def _short_phrase(text: str, keywords: list[str], max_words: int = 16) -> str | None:
+    """Pull a short, clean, representative phrase mentioning one of the
+    topic's keywords. Prefers a complete sentence (reads as a finished
+    thought, quotable as-is); falls back to a word-window snippet around
+    the keyword if no sentence of reasonable length qualifies. Rejects
+    anything containing profanity, even if the keyword match itself is
+    clean.
+    """
+    flat = text.replace("\n", " ")
+
+    # 1) Prefer a whole sentence containing a keyword.
+    for sentence in _sentence_re.split(flat):
+        sentence = sentence.strip()
+        n_words = len(sentence.split())
+        if not (4 <= n_words <= max_words):
+            continue
+        lower_words = [w.lower().strip(".,!?;:\"'()") for w in sentence.split()]
+        if not _is_clean(lower_words):
+            continue
+        for kw in keywords:
+            if kw.split()[0] in lower_words:
+                return sentence
+
+    # 2) Fall back to a word-window snippet around the first keyword match.
+    words = flat.split()
     lower = [w.lower().strip(".,!?;:\"'()") for w in words]
     for kw in keywords:
         kw_first = kw.split()[0]
@@ -235,13 +262,9 @@ def _short_phrase(text: str, keywords: list[str], max_words: int = 12) -> str | 
                 start = max(0, i - 3)
                 end = min(len(words), i + max_words - 3)
                 snippet_words = lower[start:end]
-                if any(_has_profanity(sw) for sw in snippet_words):
+                if not _is_clean(snippet_words):
                     continue
                 snippet = " ".join(words[start:end]).strip()
-                # Steam self-censors profanity in review text as repeated
-                # "♥" (heart) characters -- treat that as profanity too.
-                if "♥" in snippet:
-                    continue
                 if len(snippet.split()) >= 3:
                     return snippet
     return None
