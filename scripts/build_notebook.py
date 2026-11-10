@@ -41,6 +41,11 @@ from analysis import (
     weekly_volume_and_positivity,
     playtime_by_recommendation,
     topic_model_negative_reviews,
+    add_bh_correction,
+    assign_themes,
+    load_patch_events,
+    theme_shift_by_event,
+    weekly_theme_share,
 )
 
 pd.set_option("display.max_colwidth", 120)
@@ -186,6 +191,7 @@ for patch, color in zip(bp["boxes"], ["#2E7D5B", "#B3493B"]):
     patch.set_facecolor(color)
     patch.set_alpha(0.5)
 
+ax.set_xlim(0, 400)
 ax.set_xlabel("Playtime at time of review (hours, clipped at 400 for readability)")
 ax.set_title("Playtime at review: positive vs. negative")
 fig.tight_layout()
@@ -202,6 +208,263 @@ around long enough to write a glowing review have already gotten a lot
 of hours out of it. It is *not* proof of why: reviews are a snapshot of
 stated opinion at one point in time, not a measurement of play behavior
 over time."""
+))
+
+cells.append(nbf.v4.new_markdown_cell(
+"""## 4. Theme trends by patch
+
+Goal: show whether each of the six negative-review themes above rises or
+falls after specific, officially-verified V Rising patches, in a way a
+live team could read as patch feedback.
+
+**Patch timeline** (`data/patch_events.csv`): every row sourced directly
+from Steam's own news feed for app 1604030 (the `ISteamNews/GetNewsForApp`
+API), with a working source URL, no guessed dates. V Rising ships hotfixes
+far more often than the six listed here; the many "Hot Fix N.M" posts that
+cluster within days of a major update (and of each other) are deliberately
+left out, since their before/after windows would overlap with a neighboring
+event's and make attribution meaningless."""
+))
+
+cells.append(nbf.v4.new_code_cell(
+"""events = load_patch_events("../data/patch_events.csv")
+events[["date", "name", "type"]]
+"""
+))
+
+cells.append(nbf.v4.new_markdown_cell(
+"""**Theme assignment:** reuses the exact TF-IDF + NMF model fit above (same
+vectorizer settings, same `random_state`, not refit). Each negative
+review's six NMF weights are row-normalized; a theme is assigned once its
+normalized weight is >= 0.3, so a review can carry zero, one, or more
+themes."""
+))
+
+cells.append(nbf.v4.new_code_cell(
+"""themed, theme_labels, n_total_negative, n_no_theme = assign_themes(df)
+print(f"{n_total_negative:,} total negative reviews")
+print(f"{n_no_theme:,} ({n_no_theme / n_total_negative * 100:.1f}%) get no theme at all")
+themed["n_themes"].value_counts().sort_index()
+"""
+))
+
+cells.append(nbf.v4.new_markdown_cell(
+"""**Spot check:** 10 random reviews assigned "Updates sometimes force a new
+save to access new content" from the 4 weeks before Invaders of Oakveil,
+and 10 from the 4 weeks after, to check the assignment is actually about
+save wipes and not a keyword-matching artifact."""
+))
+
+cells.append(nbf.v4.new_code_cell(
+"""oak_date = events.loc[events["name"].str.contains("Oakveil"), "date"].iloc[0]
+save_label = "Updates sometimes force a new save to access new content"
+# Excludes reviews with an em or en dash so this spot check's quoted
+# excerpts don't carry one into committed notebook output; doesn't affect
+# which reviews get the theme, only which ones this illustrative sample draws from.
+no_dash = ~themed["review_text"].str.contains("\\u2014|\\u2013")
+save_reviews = themed[themed[save_label] & no_dash]
+before_sample = save_reviews[
+    (save_reviews["created_at"] >= oak_date - pd.Timedelta(days=28))
+    & (save_reviews["created_at"] < oak_date)
+].sample(10, random_state=7)
+after_sample = save_reviews[
+    (save_reviews["created_at"] >= oak_date + pd.Timedelta(days=7))
+    & (save_reviews["created_at"] < oak_date + pd.Timedelta(days=35))
+].sample(10, random_state=7)
+
+print("BEFORE:")
+for t in before_sample["review_text"]:
+    print(" -", t.replace("\\n", " ")[:200])
+print()
+print("AFTER:")
+for t in after_sample["review_text"]:
+    print(" -", t.replace("\\n", " ")[:200])
+"""
+))
+
+cells.append(nbf.v4.new_markdown_cell(
+"""Roughly 8-9 of 10 reviews in each window genuinely discuss a save wipe or
+having to start over on the game's own terms; the rest are plausible but
+weaker fits (e.g. general frustration with the update that happens to
+co-occur with save-wipe complaints in the same review). That's a normal
+noise level for an unsupervised 0.3 threshold, not a labeling failure."""
+))
+
+cells.append(nbf.v4.new_markdown_cell(
+"""**Before/after per event:** a 4-week window immediately before each event
+is compared to a 4-week window starting a week after (the release week
+itself is skipped). The metric is each theme's share of *all* negative
+reviews in the window, not just modeled ones, since reviews too short to
+model structurally can't be said to mention anything. Windows under 30
+negative reviews are skipped outright. Each share gets a 95% Wilson
+interval; the before-after difference gets a 95% normal-approximation
+interval with a two-sided p-value for the correction below."""
+))
+
+cells.append(nbf.v4.new_code_cell(
+"""shift = theme_shift_by_event(df, themed, theme_labels, events)
+pd.set_option("display.max_rows", 40)
+cols = ["event", "theme", "n_before", "n_after", "skipped", "share_before", "share_after", "diff", "diff_lo", "diff_hi", "significant"]
+shift[cols]
+"""
+))
+
+cells.append(nbf.v4.new_markdown_cell(
+"""**Checking the "significant" shifts four ways before trusting them:**
+
+1. The 95% interval excludes zero (above).
+2. Benjamini-Hochberg correction at a 5% false discovery rate, across all
+   30 event-theme pairs tested (not just the interesting-looking ones).
+3. A raw-weight robustness check: assign themes from the *raw, unnormalized*
+   NMF weights instead of row-normalized ones (threshold recalibrated to
+   assign a comparable overall share of reviews), then redo the comparison.
+4. An all-reviews robustness check: redo the comparison with each theme's
+   share measured against *all* reviews in the window, not negative
+   reviews only.
+
+Checks 3 and 4 exist because row-normalizing six weights that sum to 1 has
+a side effect: if one theme's weight collapses for a group of reviews, the
+other five mechanically look larger in share terms for those same
+reviews, with no real independent change in them. This is the
+"closure problem" in compositional data analysis, and it turns out to
+matter here."""
+))
+
+cells.append(nbf.v4.new_code_cell(
+"""shift_bh = add_bh_correction(shift)
+
+RAW_WEIGHT_THRESHOLD = 0.01  # calibrated to assign a comparable overall share to the 0.3 normalized threshold
+themed_raw, theme_labels_raw, _, _ = assign_themes(df, normalize=False, threshold=RAW_WEIGHT_THRESHOLD)
+shift_raw = theme_shift_by_event(df, themed_raw, theme_labels_raw, events)
+
+shift_all = theme_shift_by_event(df, themed, theme_labels, events, denominator="all")
+
+key_cols = ["event", "theme"]
+checked = shift_bh.merge(
+    shift_raw[key_cols + ["significant"]].rename(columns={"significant": "sig_raw"}),
+    on=key_cols, how="left",
+).merge(
+    shift_all[key_cols + ["significant"]].rename(columns={"significant": "sig_all"}),
+    on=key_cols, how="left",
+)
+checked["confirmed"] = (
+    checked["significant"] & checked["bh_significant"]
+    & checked["sig_raw"].fillna(False) & checked["sig_all"].fillna(False)
+)
+
+cols2 = ["event", "theme", "diff", "significant", "bh_significant", "sig_raw", "sig_all", "confirmed"]
+checked[checked["significant"]][cols2]
+"""
+))
+
+cells.append(nbf.v4.new_markdown_cell(
+"""Only the Invaders of Oakveil / "forced new save" row is `confirmed=True`
+above. The other three rows that looked significant on the 95% interval
+alone (boss/gear and PvP/PvE around Oakveil, and the October patch's
+"forced new save" dip) each fail at least one of the three additional
+checks and are not reported as findings below."""
+))
+
+cells.append(nbf.v4.new_markdown_cell(
+"""**Sensitivity check:** the before/after comparison (95% interval only,
+not the full four-check version above) re-run with 2-week and 8-week
+windows instead of 4. If the significance call flips for some pairs,
+that's reported here rather than silently picking whichever window looks
+best."""
+))
+
+cells.append(nbf.v4.new_code_cell(
+"""base = theme_shift_by_event(df, themed, theme_labels, events, before_days=28, after_days=28)
+flips = []
+for wdays, wname in [(14, "2wk"), (56, "8wk")]:
+    sens = theme_shift_by_event(df, themed, theme_labels, events, before_days=wdays, after_days=wdays)
+    merged = base.merge(sens, on=["event", "theme"], suffixes=("_base", "_sens"))
+    for _, r in merged[merged["significant_base"] != merged["significant_sens"]].iterrows():
+        flips.append((wname, r["event"], r["theme"], r["significant_base"], r["significant_sens"]))
+
+print(f"{len(flips)} of {len(base) - base['skipped'].sum()} event-theme pairs flip significance under a different window width:")
+for wname, event, theme, sig_base, sig_sens in flips:
+    print(f"  [{wname}] {event} / {theme}: significant at 4wk={sig_base}, at {wname}={sig_sens}")
+"""
+))
+
+cells.append(nbf.v4.new_markdown_cell(
+"""### 4-week rolling theme share over time"""
+))
+
+cells.append(nbf.v4.new_code_cell(
+"""wts = weekly_theme_share(df, themed, theme_labels)
+
+fig, axes = plt.subplots(3, 2, figsize=(11, 8), sharex=True)
+for ax, label in zip(axes.flat, theme_labels):
+    ax.plot(wts["created_at"], wts[f"share_rolling4_{label}"], color="#3D5A80", linewidth=1.3)
+    for _, ev in events.iterrows():
+        color = "#B3493B" if ev["type"] == "major" else "#6B6E76"
+        style = "--" if ev["type"] == "major" else ":"
+        ax.axvline(ev["date"], color=color, linestyle=style, linewidth=1)
+    ax.set_title(label, fontsize=9, loc="left")
+    ax.set_ylabel("% of neg. reviews", fontsize=8)
+    ax.tick_params(labelsize=7)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+
+fig.autofmt_xdate(rotation=25)
+fig.tight_layout()
+fig.savefig("../images/theme_trends_by_patch.png", dpi=160, bbox_inches="tight")
+plt.show()
+"""
+))
+
+cells.append(nbf.v4.new_markdown_cell(
+"""### Before/after summary
+
+See `images/theme_shift_by_event.png` for the heatmap version of the table
+printed above (built by `scripts/make_theme_trends.py`)."""
+))
+
+cells.append(nbf.v4.new_markdown_cell(
+"""**Findings:**
+
+1. **The one shift that survives every check:** around Invaders of Oakveil,
+   complaints about being forced into a new save to access new content
+   dropped from 63.6% of negative reviews (n=88) to 19.5% (n=251), a
+   -44.1pp change (95% CI -55.3 to -32.9pp, p < 0.001). It holds up using
+   raw NMF weights instead of normalized ones (-40.6pp, CI -51.7 to
+   -29.5pp) and measured against all reviews rather than negative reviews
+   only (-7.9 percentage points of all reviews, CI -10.5 to -5.4pp), and
+   survives Benjamini-Hochberg correction. People complained about the save
+   wipe mostly before it happened, not after.
+2. **Two shifts initially looked significant but did not survive the full
+   check, and are retracted as findings.** "Boss fights and gear
+   progression feel unbalanced" rose +16.4pp on the original 95% interval
+   (CI +5.6 to +27.2pp), and "PvP/PvE server balance and solo-play
+   friction" rose +13.1pp (CI +4.0 to +22.1pp), both around Invaders of
+   Oakveil. Both shrink to non-significant under the raw-weight check
+   (+5.5pp, CI -6.6 to +17.6pp; and -0.7pp, CI -12.6 to +11.1pp) and under
+   the all-reviews check, and neither survives Benjamini-Hochberg
+   correction: the normalization side effect described above, not an
+   independent signal. A third shift, the October 2025 patch's "forced new
+   save" dip (originally -7.9pp, CI -15.8 to -0.0pp), also does not
+   survive Benjamini-Hochberg correction (p = 0.046 against a required
+   p <= 0.007 at its rank) and is likewise not reported as a finding.
+3. Out of 30 event-theme pairs with enough data to test, only the one
+   finding above holds up end to end. Everything else, including every
+   theme around both hotfix-type events, the October 2025 patch, and Patch
+   1.1.13.0, does not move in a way this method can tell apart from noise
+   once corrected for multiple testing. If a theme doesn't move, that's
+   the honest result, not a gap in the analysis.
+4. "Camera and controller control issues" and "Solo play feels like more of
+   a grind than with friends" never show a significant shift around any
+   verified event tested here, at any window width: a stable background
+   complaint rather than something that responds to a specific patch.
+
+**This is correlation keyed to release dates, not a causal test.** Even the
+one confirmed shift above is not proof the patch caused it. Free weekends,
+platform-wide Steam sales, and influencer/content-creator waves can land
+in the same before/after windows (see the volume chart above) and are not
+separated out here. An observed shift may partly reflect one of those
+instead of the patch itself; a shift that doesn't appear is more
+trustworthy evidence of "nothing changed" than a shift that does appear is
+evidence of "the patch caused this.\""""
 ))
 
 cells.append(nbf.v4.new_markdown_cell(

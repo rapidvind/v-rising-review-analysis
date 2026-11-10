@@ -7,3 +7,7 @@ __pycache__/
 # cloning this repo can regenerate it with scripts/fetch_reviews.py.
 data/*.jsonl
 data/*.csv
+# ...except our own small, hand-curated patch timeline (not review text).
+!data/patch_events.csv
+data/_vr_news_raw.json
+data/_vr_news_list.txt
