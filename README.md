@@ -9,6 +9,24 @@ by, or produced in cooperation with Stunlock Studios.** All review text
 belongs to the Steam users who wrote it; it is used here transiently (not
 redistributed) for aggregate, anonymized analysis.
 
+> ### Summary in plain words
+>
+> 1. Most reviewers like the game: about 9 in 10 reviews are positive.
+> 2. Unhappy players still gave it a real try: negative reviewers had
+>    played about 30 hours, against about 60 for happy players.
+> 3. Updates bring players back, but opinion stays steady: each big update
+>    causes a burst of reviews that fades within about two months.
+> 4. Complaints keep coming back to six things: unbalanced bosses and
+>    gear, having to start a new save for new content, PvP and PvE server
+>    balance, a slow or grindy core loop, camera and controller controls,
+>    and solo play feeling like a grind.
+> 5. One complaint clearly eased after an update: before Invaders of
+>    Oakveil, about 2 in 3 negative reviews were about starting over;
+>    afterwards about 1 in 5.
+> 6. Reviews show what players say, not what they do. In-game data could
+>    show where players stop, how long they play after each patch, and
+>    who leaves without reviewing.
+
 ## What this is
 
 - Review volume and 4-week rolling % positive, by week, with the two major

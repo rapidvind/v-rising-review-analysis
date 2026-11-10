@@ -66,15 +66,78 @@ class Cursor:
     def advance_in(self, inches):
         self.y -= inches
 
-    def text(self, s, fontsize, **kwargs):
-        self.fig.text(MARGIN_L / PAGE_W, self.frac(), s, fontsize=fontsize,
+    def text(self, s, fontsize, x_in=None, **kwargs):
+        x = MARGIN_L if x_in is None else x_in
+        self.fig.text(x / PAGE_W, self.frac(), s, fontsize=fontsize,
                        va="top", ha="left", **kwargs)
 
-    def wrapped_text(self, s, fontsize, width_chars, line_gap_in=None, **kwargs):
+    def wrapped_text(self, s, fontsize, width_chars, line_gap_in=None, x_in=None, **kwargs):
         line_h = line_gap_in or (fontsize * 1.38 / 72)
         for line in textwrap.wrap(s, width=width_chars):
-            self.text(line, fontsize, **kwargs)
+            self.text(line, fontsize, x_in=x_in, **kwargs)
             self.advance_in(line_h)
+
+
+PLAIN_SUMMARY_POINTS = [
+    "Most reviewers like the game: about 9 in 10 reviews are positive.",
+    "Unhappy players still gave it a real try: negative reviewers had played about 30 hours, "
+    "against about 60 for happy players.",
+    "Updates bring players back, but opinion stays steady: each big update causes a burst of "
+    "reviews that fades within about two months.",
+    "Complaints keep coming back to six things: unbalanced bosses and gear, having to start a "
+    "new save for new content, PvP and PvE server balance, a slow or grindy core loop, camera "
+    "and controller controls, and solo play feeling like a grind.",
+    "One complaint clearly eased after an update: before Invaders of Oakveil, about 2 in 3 "
+    "negative reviews were about starting over; afterwards about 1 in 5.",
+    "Reviews show what players say, not what they do. In-game data could show where players "
+    "stop, how long they play after each patch, and who leaves without reviewing.",
+]
+
+
+def draw_summary_box(
+    fig, cur, points,
+    title="Summary in plain words",
+    fontsize=8.1, title_fontsize=9.8,
+    width_chars=104, line_gap_in=0.118, point_gap_in=0.04,
+    pad_in=0.09,
+):
+    """Draws a shaded box containing a titled, numbered list of plain-
+    language points, with the box sized to exactly fit the wrapped text
+    (computed first, then drawn, so there's no guessed empty space)."""
+    import matplotlib.patches as mpatches
+
+    wrapped = [textwrap.wrap(f"{i}. {p}", width=width_chars) for i, p in enumerate(points, start=1)]
+    n_lines = sum(len(w) for w in wrapped)
+    title_h = title_fontsize * 1.4 / 72 + 0.05
+
+    content_h = title_h + n_lines * line_gap_in + (len(points) - 1) * point_gap_in
+    box_h = content_h + 2 * pad_in
+
+    box_left_in = MARGIN_L
+    box_w_in = CONTENT_W
+    box_top_in = cur.y
+    box_bottom_in = box_top_in - box_h
+
+    rect = mpatches.FancyBboxPatch(
+        (box_left_in / PAGE_W, box_bottom_in / PAGE_H),
+        box_w_in / PAGE_W, box_h / PAGE_H,
+        boxstyle="round,pad=0,rounding_size=0.012",
+        transform=fig.transFigure,
+        facecolor="#F3F3F0", edgecolor="#C9C9C4", linewidth=0.8,
+        zorder=0,
+    )
+    fig.add_artist(rect)
+
+    text_x = box_left_in + pad_in
+    cur.advance_in(pad_in)
+    cur.text(title, title_fontsize, x_in=text_x, weight="bold", color="#222222")
+    cur.advance_in(title_h)
+    for lines in wrapped:
+        for line in lines:
+            cur.text(line, fontsize, x_in=text_x, color="#333333")
+            cur.advance_in(line_gap_in)
+        cur.advance_in(point_gap_in)
+    cur.advance_in(pad_in - point_gap_in)
 
 
 def build_page1(df, images_dir: str):
@@ -112,7 +175,15 @@ def build_page1(df, images_dir: str):
         "or endorsed by Stunlock Studios.",
         8.5, color="#777777", style="italic",
     )
-    cur.advance_in(0.2)
+    cur.advance_in(0.16)
+
+    # ---- Summary in plain words ----
+    draw_summary_box(
+        fig, cur, PLAIN_SUMMARY_POINTS,
+        fontsize=7.8, title_fontsize=9.5, width_chars=124,
+        line_gap_in=0.105, point_gap_in=0.035, pad_in=0.08,
+    )
+    cur.advance_in(0.1)
 
     # ---- Chart 1: weekly volume + 4-week rolling % positive ----
     # Axes rects below are inset from the text margins to leave room for
@@ -121,7 +192,7 @@ def build_page1(df, images_dir: str):
     cur.text("Review volume and % positive over time", 11, weight="bold")
     cur.advance_in(0.26)
 
-    chart1_h = 2.0
+    chart1_h = 1.6
     left_in = MARGIN_L + 0.55
     right_in = MARGIN_R + 0.5
     width_in = PAGE_W - left_in - right_in
@@ -162,7 +233,7 @@ def build_page1(df, images_dir: str):
     fig.savefig(f"{images_dir}/weekly_volume_positivity.png", dpi=160, bbox_inches="tight")
     # Extra clearance below the axes for the rotated date tick labels,
     # which render below the rect, not inside it.
-    cur.advance_in(chart1_h + 0.55)
+    cur.advance_in(chart1_h + 0.45)
 
     cap1 = (
         "Major updates (red dashed, left to right): 1.0 Launch (8 May 2024), Invaders of "
@@ -172,14 +243,14 @@ def build_page1(df, images_dir: str):
         "explained. Line is a 4-week rolling % positive; weeks below 20 reviews are masked, "
         "and the final partial week is excluded."
     )
-    cur.wrapped_text(cap1, 7.2, 118, color="#666666", line_gap_in=0.125)
-    cur.advance_in(0.22)
+    cur.wrapped_text(cap1, 6.9, 128, color="#666666", line_gap_in=0.1)
+    cur.advance_in(0.14)
 
     # ---- Chart 2: playtime distribution ----
     cur.text("Playtime at review: positive vs. negative", 11, weight="bold")
     cur.advance_in(0.26)
 
-    chart2_h = 1.15
+    chart2_h = 0.95
     left2_in = MARGIN_L + 0.5
     width2_in = PAGE_W - left2_in - MARGIN_R
     ax2 = fig.add_axes([
@@ -201,11 +272,11 @@ def build_page1(df, images_dir: str):
     ax2.tick_params(labelsize=9)
     fig.savefig(f"{images_dir}/playtime_by_recommendation.png", dpi=160, bbox_inches="tight")
     # Extra clearance below the axes for the x-axis tick labels + xlabel.
-    cur.advance_in(chart2_h + 0.42)
+    cur.advance_in(chart2_h + 0.34)
 
     # ---- Findings ----
-    cur.text("Findings", 11, weight="bold")
-    cur.advance_in(0.17)
+    cur.text("Findings", 10.5, weight="bold")
+    cur.advance_in(0.14)
     findings = [
         f"1. Positive reviews have a higher median playtime at review ({median_pt_pos:.0f}h) "
         f"than negative ones ({median_pt_neg:.0f}h): people who bounce off the game tend to "
@@ -217,45 +288,45 @@ def build_page1(df, images_dir: str):
         "diffuse (below), not a diagnosis of why but a map of where to look.",
     ]
     for f in findings:
-        cur.wrapped_text(f, 8.7, 108, line_gap_in=0.145)
-        cur.advance_in(0.04)
-    cur.advance_in(0.1)
+        cur.wrapped_text(f, 8.2, 114, line_gap_in=0.128)
+        cur.advance_in(0.03)
+    cur.advance_in(0.06)
 
     # ---- Six negative-review themes ----
-    cur.text("Recurring themes in negative reviews", 11, weight="bold")
-    cur.advance_in(0.17)
+    cur.text("Recurring themes in negative reviews", 10.5, weight="bold")
+    cur.advance_in(0.14)
     cur.wrapped_text(
         "TF-IDF + NMF topic model over negative reviews only. Each line is the model's theme "
         "plus one short, clean representative phrase (not a full quote).",
-        7.6, 118, color="#666666", style="italic", line_gap_in=0.115,
+        7.2, 126, color="#666666", style="italic", line_gap_in=0.1,
     )
-    cur.advance_in(0.05)
+    cur.advance_in(0.03)
     for i, t in enumerate(topics, start=1):
         phrase = pick_phrase(t)
-        cur.text(f"{i}. {t['label']}", 9.2, weight="bold")
-        cur.advance_in(0.15)
+        cur.text(f"{i}. {t['label']}", 8.8, weight="bold")
+        cur.advance_in(0.13)
         if phrase:
-            cur.text(f"“{phrase}”", 8.3, style="italic", color="#444444")
-            cur.advance_in(0.145)
-        cur.advance_in(0.035)
-    cur.advance_in(0.08)
+            cur.text(f"“{phrase}”", 7.8, style="italic", color="#444444")
+            cur.advance_in(0.125)
+        cur.advance_in(0.02)
+    cur.advance_in(0.05)
 
     # ---- Limitations + closing line ----
-    cur.text("Limitations", 10, weight="bold", color="#555555")
-    cur.advance_in(0.15)
+    cur.text("Limitations", 9.5, weight="bold", color="#555555")
+    cur.advance_in(0.12)
     limitations = (
         "Steam reviewers are a self-selected, vocal subset of players, not a representative "
         "sample; this dataset is English-language reviews only; review text reflects stated "
         "opinion, not behavioral telemetry (e.g. actual churn points, session structure)."
     )
-    cur.wrapped_text(limitations, 8, 118, color="#666666", style="italic", line_gap_in=0.135)
-    cur.advance_in(0.1)
+    cur.wrapped_text(limitations, 7.6, 126, color="#666666", style="italic", line_gap_in=0.115)
+    cur.advance_in(0.07)
 
     closing = (
         "What internal telemetry could add: exact drop-off points, session length and return "
         "cadence by patch, and silent churn from players who never write a review at all."
     )
-    cur.wrapped_text(closing, 8.7, 100, weight="bold", color=PALETTE["accent"], line_gap_in=0.145)
+    cur.wrapped_text(closing, 8.2, 108, weight="bold", color=PALETTE["accent"], line_gap_in=0.125)
 
     assert cur.y > MARGIN_B, (
         f"Page 1 content overflowed the page (cursor at {cur.y:.2f}in, margin {MARGIN_B}in) -- "
